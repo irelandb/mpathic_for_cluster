@@ -10,23 +10,23 @@ import sys
 import scipy.sparse
 #Our miscellaneous functions
 import pandas as pd
-import mpathic.utils as utils
-import mpathic.EstimateMutualInfoforMImax as EstimateMutualInfoforMImax
+import mpathic_for_cluster.utils as utils
+import mpathic_for_cluster.EstimateMutualInfoforMImax as EstimateMutualInfoforMImax
 import pymc
-import mpathic.stepper as stepper
+import mpathic_for_cluster.stepper as stepper
 import os
-from mpathic import SortSeqError
-import mpathic.io as io
-import mpathic.gauge as gauge
-import mpathic.qc as qc
+from mpathic_for_cluster import SortSeqError
+import mpathic_for_cluster.io as io
+import mpathic_for_cluster.gauge as gauge
+import mpathic_for_cluster.qc as qc
 import pdb
-from mpathic import shutthefuckup
-import mpathic.numerics as numerics
+from mpathic_for_cluster import shutthefuckup
+import mpathic_for_cluster.numerics as numerics
 import cvxopt
 from cvxopt import solvers, matrix, spdiag, sqrt, div, exp
 import warnings
-import mpathic.profile_mut as profile_mut
-import mpathic.fast
+import mpathic_for_cluster.profile_mut as profile_mut
+import mpathic_for_cluster.fast
 
 
 def weighted_std(values,weights):
@@ -40,7 +40,7 @@ def add_label(s):
 
 def MaximizeMI_memsaver(
         seq_mat,df,emat_0,wtrow,db=None,burnin=1000,iteration=30000,thin=10,
-        runnum=0,verbose=False):
+        runnum=0,verbose=False,smoothing_param=0.04):
     '''Performs MCMC MI maximzation using pymc.'''    
     n_seqs = seq_mat.shape[0]
     @pymc.stochastic(observed=True,dtype=pd.DataFrame)
@@ -51,7 +51,8 @@ def MaximizeMI_memsaver(
         #need special function to evaluate pairwise models bc they are 1-D.        
         p['val'] = numerics.eval_modelmatrix_on_mutarray(
             np.transpose(value),seq_mat,wtrow)            
-        MI = EstimateMutualInfoforMImax.alt4(p.copy())
+        MI = EstimateMutualInfoforMImax.alt4(p.copy(),
+                                             smoothing_param=smoothing_param)
         print(MI)
         return n_seqs*MI
     #set location to save full MCMC chain
@@ -446,7 +447,7 @@ def main(df,lm='IM',modeltype='MAT',LS_means_std=None,\
     db=None,iteration=30000,burnin=1000,thin=10,\
     runnum=0,initialize='LS',start=0,end=None,foreground=1,\
     background=0,alpha=0,pseudocounts=1,test=False,drop_library=False,\
-    verbose=False,tm=None):
+    verbose=False,tm=None,smoothing_param=0.04):
     
     # Determine dictionary
     seq_cols = qc.get_cols_from_df(df,'seqs')
@@ -603,7 +604,8 @@ def main(df,lm='IM',modeltype='MAT',LS_means_std=None,\
         emat = MaximizeMI_memsaver(
                 seq_mat,df.copy(),emat_0,wtrow,db=db,
                 iteration=iteration,burnin=burnin,
-                thin=thin,runnum=runnum,verbose=verbose)
+                thin=thin,runnum=runnum,verbose=verbose,
+                smoothing_param=smoothing_param)
 
     #We have infered out matrix.
     #now format the energy matrices to get them ready to output
@@ -690,7 +692,7 @@ def wrapper(args):
         alpha=args.penalty,modeltype=args.modeltype,
         learningmethod=args.learningmethod,
         start=args.start,end=args.end,iteration=args.iteration,
-        burnin=args.burnin,thin=args.thin,pseudocounts=args.pseudocounts,)
+        burnin=args.burnin,thin=args.thin,pseudocounts=args.pseudocounts)
 
     inloc = io.validate_file_for_reading(args.i) if args.i else sys.stdin
     input_df = io.load_dataset(inloc)
@@ -706,7 +708,7 @@ def wrapper(args):
         runnum=args.runnum,initialize=args.initialize,\
         foreground=args.foreground,background=args.background,\
         alpha=args.penalty,pseudocounts=args.pseudocounts,
-        verbose=args.verbose,tm=args.tm)
+        verbose=args.verbose,tm=args.tm,smoothing_param=args.smoothing_param)
 
     #if mt = pair then output_df is a numpy array, we need to save differently.
     io.write(output_df,outloc)
@@ -715,6 +717,9 @@ def wrapper(args):
 # Connects argparse to wrapper
 def add_subparser(subparsers):
     p = subparsers.add_parser('learn_model')
+    p.add_argument('--smoothing_param',default=0.04,type=float, 
+        help='''parameter to
+        use for kernel density estimates''')
     p.add_argument(
         '-s','--start',type=int,default=0,
         help ='Position to start your analyzed region')

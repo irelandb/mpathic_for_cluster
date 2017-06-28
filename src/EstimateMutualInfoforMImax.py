@@ -103,7 +103,9 @@ def integrator_solve(df):
     return MI
     
 
-def alt4(df, coarse_graining_level = 0.01,return_freg=False):
+def alt4(
+         df, coarse_graining_level = 0.01,return_freg=False,
+         smoothing_param=0.04):
     '''
     MI ESTIMATOR EDITED BY JBK 
     Used when lm=memsaver 
@@ -165,7 +167,8 @@ def alt4(df, coarse_graining_level = 0.01,return_freg=False):
         raise TypeError(\
             'group_num=%d does not match n_groups=%s'%(group_num,n_groups))
     # Smooth empirical distribution with gaussian KDE
-    f_reg = scipy.ndimage.gaussian_filter1d(cts_grouped,0.04*n_groups,axis=0)
+    f_reg = scipy.ndimage.gaussian_filter1d(cts_grouped,
+                                            smoothing_param*n_groups,axis=0)
 
     # Return mutual information
     if return_freg:
